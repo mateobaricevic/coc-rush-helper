@@ -108,6 +108,7 @@ test('file upload imports a village and a plan can be downloaded',async()=>{
   assert.equal(filename,'rush-plan-th13.txt');
   assert.match(await content.text(),/UPGRADE PRIORITIES/);
   assert.match(await content.text(),/TOWN HALL CHECKLIST/);
+  assert.match(await content.text(),/BUILDER BASE — SIXTH BUILDER/);
 });
 test('equipment core is capped at ten pieces',()=>{
   $('demo-button').click();$('tab-equipment').click();
@@ -117,4 +118,44 @@ test('equipment core is capped at ten pieces',()=>{
   const extra=[...document.querySelectorAll('[data-equipment]')].find(c=>!c.checked);extra.checked=true;change(extra);
   assert.equal(extra.checked,false);
   assert.match($('equipment-feedback').textContent,/Keep your core to 10/);
+});
+
+test('Builder Base has its own queue and is reachable with keyboard tab navigation',()=>{
+  $('demo-button').click();$('tab-equipment').click();
+  $('tab-equipment').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+  assert.equal($('panel-builder').hidden,false);
+  assert.equal(document.activeElement.id,'tab-builder');
+  assert.match($('panel-builder').textContent,/Rush toward Builder Hall 9/);
+  assert.match($('panel-builder').textContent,/Battle Machine 18 \+ Battle Copter 15 = 33 \/ 45/);
+  assert.match($('panel-builder').textContent,/Star Laboratory/);
+  $('tab-builder').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+  assert.equal($('panel-queue').hidden,false);
+  $('tab-heroes').click();document.querySelector('[data-open-builder]').click();
+  assert.equal($('panel-builder').hidden,false);
+});
+
+test('missing Builder Base levels can be filled, validated, reset, and optionally remembered',()=>{
+  $('village-json').value=JSON.stringify(fixture);submit();$('tab-builder').click();
+  assert.equal($('builder-inputs').open,true);
+  assert.equal($('builder-machine').placeholder,'Not in export');
+  assert.match($('panel-builder').textContent,/Hero levels missing/);
+  $('builder-machine').value='23';change($('builder-machine'));
+  $('builder-copter').value='10';change($('builder-copter'));
+  assert.equal($('builder-input-error').hidden,false);
+  assert.match($('builder-input-error').textContent,/starts at level 15/);
+  $('builder-copter').value='22';change($('builder-copter'));
+  assert.equal($('builder-input-error').hidden,true);
+  assert.match($('panel-builder').textContent,/Battle Machine 23 \+ Battle Copter 22 = 45 \/ 45/);
+  assert.equal(localStorage.length,0);
+  $('remember').checked=true;change($('remember'));
+  assert.deepEqual(JSON.parse(localStorage.getItem('rush-helper-v1')).options.builderBase,{machine:23,copter:22});
+  $('builder-reset').click();
+  assert.equal($('builder-machine').value,'');
+  assert.match($('panel-builder').textContent,/Hero levels missing/);
+  assert.deepEqual(JSON.parse(localStorage.getItem('rush-helper-v1')).options.builderBase,{});
+  $('clear-input').click();
+  assert.equal(localStorage.length,0);
+  $('demo-button').click();$('tab-builder').click();
+  assert.equal($('builder-machine').value,'');
+  assert.equal($('builder-machine').placeholder,'Detected: 18');
 });

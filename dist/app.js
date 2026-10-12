@@ -1,12 +1,14 @@
 import { parseVillage, analyzeVillage, maxLevel, formatDuration, GUIDE_URL, DAY } from './engine.js';
+import { analyzeBuilderBase, BOB_GUIDE_URL } from './builder-base.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
 const storageKey = 'rush-helper-v1';
 let data, village, plan, rawVillage, demo = false, filter = 'All', activeTab = 'queue', heroFilter = 'All';
 let selectedEquipment = new Set();
+let builderPlan, builderOverrides = {};
 const number = value => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-function options() { return { builders: $('builders').value === 'auto' ? undefined : Number($('builders').value), army: $('army').value, boost: Number($('boost').value), cwl: $('cwl').checked, equipment: [...selectedEquipment] }; }
+function options() { return { builders: $('builders').value === 'auto' ? undefined : Number($('builders').value), army: $('army').value, boost: Number($('boost').value), cwl: $('cwl').checked, equipment: [...selectedEquipment], builderBase:{...builderOverrides} }; }
 function cost(value, resource) {
   if (value && typeof value === 'object') return Object.entries(value).filter(([,n]) => n > 0).map(([name,n]) => `${number(n)} ${name.replace('_ore', '').replace('shiny','shiny ore').replace('glowy','glowy ore').replace('starry','starry ore')}`).join(' · ') || 'Check in game';
   return value > 0 ? `${number(Math.ceil(value * (1 - plan.boost)))} ${esc(resource ?? '')}` : 'Check cost in game';
@@ -23,6 +25,7 @@ function save() {
 }
 function reset() {
   village = plan = rawVillage = null;
+  builderPlan = null; builderOverrides = {};
   selectedEquipment.clear();
   $('village-json').value = '';
   $('remember').checked = false;
@@ -39,7 +42,7 @@ function importVillage(raw, isDemo=false, retainSelection=false) {
     village = parseVillage(raw, data);
     rawVillage = typeof raw === 'string' ? JSON.parse(raw.replace(/^\uFEFF/, '')) : raw;
     demo = isDemo;
-    if (!retainSelection) selectedEquipment = new Set();
+    if (!retainSelection) { selectedEquipment = new Set(); builderOverrides = {}; $('panel-builder').replaceChildren(); }
     filter = 'All'; heroFilter = 'All';
     activeTab = 'queue';
     updatePlan();
@@ -57,6 +60,7 @@ function importVillage(raw, isDemo=false, retainSelection=false) {
 function updatePlan() {
   if (!village) return;
   plan = analyzeVillage(village, data, options());
+  builderPlan = analyzeBuilderBase(village, data, builderOverrides);
   $('village-name').textContent = village.name;
   $('village-tag').textContent = village.tag || (village.present.buildings ? 'Home Village export' : 'Partial player profile');
   $('demo-badge').hidden = !demo;
@@ -67,7 +71,7 @@ function updatePlan() {
   if (plan.busy > plan.builderCount) warnings.push('More active upgrades than regular builders were detected. An extra builder or an incomplete snapshot may be involved.');
   if (village.townHall?.upgrading) warnings.unshift(`Town Hall ${village.th + 1} is already upgrading. This plan uses the current TH${village.th} caps; reimport when the upgrade finishes.`);
   $('warnings').innerHTML = warnings.length ? `<details class="warning-box"><summary>${warnings.length} data ${warnings.length === 1 ? 'note' : 'notes'} — read before acting</summary><ul>${warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>` : '';
-  renderQueue(); renderTownHall(); renderHeroes(); renderEquipment(); switchTab(activeTab);
+  renderQueue(); renderTownHall(); renderHeroes(); renderEquipment(); renderBuilderBase(); switchTab(activeTab);
   $('plan-count').textContent = `${plan.tasks.length} priorities · Timers reflect the export${plan.boost ? ` · ${Math.round(plan.boost * 100)}% discount applied` : ' · Base costs & times'}`;
 }
 function taskHTML(task, index, deferred=false) {
@@ -112,7 +116,8 @@ function renderHeroes() {
   html += `<div class="subheading"><h3>Make magic items count</h3><span>Use overflow, avoid waste</span></div>`;
   if (plan.magic.hero) html += `<div class="magic-card"><h4>Book of Heroes → ${esc(plan.magic.hero.name)}</h4><p>${formatDuration(plan.magic.hero.nextTime)} base next-upgrade timer. ${plan.magic.hero.nextTime >= 8*DAY ? 'This is in the guide’s ideal value range.' : 'Not in 8-day range yet. Save books when you can, but use an overflowing book on your longest available hero upgrade.'} Confirm Hero Hall access and resources before using a book.</p></div>`;
   if (plan.magic.building) html += `<div class="magic-card"><h4>Building Book / Hammer candidate → ${esc(plan.magic.building.name)}</h4><p>${time(plan.magic.building.time)} for the next level. This is the longest available building step in your priority list. Prefer offensive value and required TH gates; keep using your normal builders.</p></div>`;
-  html += note(village.bob ? 'B.O.B’s Hut is present: the sixth Home Village builder has been detected.' : 'The sixth builder is a permanent boost. Work toward B.O.B in Builder Base alongside your rush; this tool’s upgrade queue covers the Home Village.');
+  html += note(village.bob ? 'B.O.B’s Hut is present: the sixth Home Village builder has been detected.' : 'The sixth builder is a permanent boost. Follow your Builder Base checklist alongside the Home Village rush.');
+  html += '<button type="button" class="text-button" data-open-builder>See your sixth-builder plan →</button>';
   $('panel-heroes').innerHTML = html;
 }
 function renderEquipment() {
@@ -128,6 +133,43 @@ function renderEquipment() {
   }
   html += note('Hero Journey rewards, chest timing, ore income, and event equipment need personal judgment. This quick planner does not simulate those systems.');
   $('panel-equipment').innerHTML = html;
+}
+function renderBuilderBase(keepInputsOpen) {
+  const previousOpen = $('builder-inputs')?.open;
+  const p = builderPlan;
+  const fields = [
+    ['hall','Builder Hall',data.meta.maxBuilderHall],['machine','Battle Machine',35],['copter','Battle Copter',35],
+    ['troopLevel','Highest Builder Base troop',20],['defenseLevel','Highest Builder Base defense',data.meta.maxBuilderHall],['control','B.O.B Control',5]
+  ];
+  let html = `<div class="builder-heading"><div><div class="section-kicker">THE SIXTH-BUILDER TRACK</div><h3>${esc(p.status)}</h3></div>${pill(p.unlocked ? 'B.O.B UNLOCKED' : `${p.complete} / ${p.checks.length} COMPLETE`,p.unlocked ? 'green' : 'gold')}</div>`;
+  html += '<p class="builder-intro">A permanent extra builder for your Home Village. Work on this alongside your rush, using Builder Base resources and builders.</p>';
+  html += `<div class="builder-progress"><div class="progress" role="progressbar" aria-label="Sixth builder requirements completed" aria-valuemin="0" aria-valuemax="${p.checks.length}" aria-valuenow="${p.complete}"><span style="width:${p.complete/p.checks.length*100}%"></span></div></div>`;
+  html += `<div class="builder-checks">${p.checks.map(check => `<div class="check-row"><span class="check-icon ${check.state}" aria-label="${check.state === 'done' ? 'Complete' : check.state === 'unknown' ? 'Needs information' : 'Needs work'}">${check.state === 'done' ? '✓' : check.state === 'unknown' ? '?' : '↑'}</span><div><h4>${esc(check.label)}</h4><p>${esc(check.detail)}</p></div></div>`).join('')}</div>`;
+  if (p.warnings.length) html += note(p.warnings.slice(0,6).join(' '));
+  if (!p.unlocked) {
+    html += `<details class="how-to builder-inputs" id="builder-inputs" ${(keepInputsOpen ?? previousOpen ?? (p.unknown.length > 0)) ? 'open' : ''}><summary>Fill missing levels or adjust this plan <span aria-hidden="true">+</span></summary><p>Blank fields use the export. Enter 0 for an unbuilt hero. Battle Copter starts at 15. Only completed levels count.</p><div class="builder-fields">`;
+    html += fields.map(([field,label,max]) => `<label for="builder-${field}">${esc(label)}<input id="builder-${field}" data-builder-field="${field}" type="number" min="${field === 'hall' ? 1 : 0}" max="${max}" step="1" inputmode="numeric" value="${builderOverrides[field] ?? ''}" placeholder="${p.values[field] == null ? 'Not in export' : `Detected: ${p.values[field]}`}" aria-describedby="builder-input-help"></label>`).join('');
+    html += `<label for="builder-gearUps">Completed Home Village gear-ups<select id="builder-gearUps" data-builder-field="gearUps"><option value="">Use export${p.values.gearUps == null ? ' (unknown)' : ` (${p.values.gearUps}/3)`}</option>${[0,1,2,3].map(value => `<option value="${value}" ${builderOverrides.gearUps === value ? 'selected' : ''}>${value} of 3 complete</option>`).join('')}</select></label></div><p id="builder-input-help">Manual entries replace exported levels for this plan. Reimport to refresh running timers. They are saved only when “Remember this village” is enabled.</p><p id="builder-input-error" class="error" role="alert" hidden></p><button type="button" class="text-button" id="builder-reset">Reset to exported levels</button></details>`;
+    html += `<div class="subheading"><h3>What to work on next</h3><span>${p.builderCount == null ? 'Builder count unknown' : `${p.builderCount} Builder Base builder${p.builderCount === 1 ? '' : 's'}`}</span></div>`;
+    if (p.unknown.length) html += note('Some requirements need information. Fill the missing values above to personalize this queue; unknown progress is not treated as zero.');
+    html += p.tasks.length ? p.tasks.map((task,index) => builderTaskHTML(task,index)).join('') : note(p.active.length ? 'The relevant upgrades are already running. Finish them and reimport before claiming the requirements.' : 'Confirm the missing requirements above, or claim B.O.B in game when the checklist is complete.');
+    if (p.deferred.length) html += `<details class="how-to"><summary>After running upgrades finish <span>${p.deferred.length} next steps</span></summary>${p.deferred.map((task,index) => builderTaskHTML(task,index,true)).join('')}</details>`;
+    if (p.active.length) html += `<div class="subheading"><h3>Already working in Builder Base</h3><span>Remaining time at export</span></div>${p.active.map(row => `<div class="active-row"><strong>${esc(row.name)} · Lv ${row.level} → ${row.planned}</strong><span>${formatDuration(row.timer)}</span></div>`).join('')}`;
+  } else html += note('B.O.B’s Hut confirms the unlock. Your Home Village builder count already includes him; keep using the Home Village queue for the strategic rush.');
+  html += `<details class="how-to builder-guide"><summary>A practical route to B.O.B <span aria-hidden="true">+</span></summary><ol>
+    <li><b>Reach BH9.</b> Place required buildings, keep an effective farming army, and upgrade storage when the next step needs it. Routine defense levels and walls can wait.</li>
+    <li><b>Use the separate queues.</b> At BH6, O.T.T.O adds a second Builder Base builder. Keep Star Laboratory research running alongside building and hero work.</li>
+    <li><b>Finish the gear-ups.</b> Prepare one of each prerequisite below, then gear up the Home Village defenses. Leave the Master Builder available for those jobs.</li>
+    <li><b>Take one troop to 18 and one defense to 9.</b> The troop can be any troop you use. Multi Mortar overlaps the gear-up path, but an existing level-9 defense already satisfies that task.</li>
+    <li><b>Get 45 completed hero levels in total.</b> Battle Machine and Battle Copter both count. Buy the Copter at BH8 for its starting 15 levels; 30 + 15 works, and so do other combinations totaling 45. The queue lists next upgrades, not an exact finishing schedule.</li>
+    <li><b>Claim the builder.</b> Complete B.O.B Control’s task upgrades to level 5, then place B.O.B’s Hut in your Home Village.</li>
+  </ol><div class="builder-table-wrap"><table class="builder-table"><caption>Gear-up prerequisites · one building of each type</caption><thead><tr><th>Home Village</th><th>Builder Base</th><th>Progress</th></tr></thead><tbody>${p.gears.map(gear => `<tr><td>${esc(gear.name)} ${gear.homeLevel}</td><td>${esc(gear.builderName)} ${gear.builderLevel}</td><td>${gear.state === 'done' ? 'Complete' : builderOverrides.gearUps != null ? 'Check in game' : gear.ready ? 'Ready to gear up' : 'Prerequisites needed'}</td></tr>`).join('')}</tbody></table></div><p>Mortar’s Home Village prerequisite needs TH10. Clock Tower boosts and Books can help, but no spending is required by this plan. Check storage capacity and gear-up prices in game.</p></details>`;
+  html += `<p class="builder-source">B.O.B requirements: <a href="${BOB_GUIDE_URL}" target="_blank" rel="noopener noreferrer">Supercell’s guide ↗</a> · Upgrade order is this planner’s interpretation. Gold Pass discounts apply to listed costs and times; Clock Tower boosts are not simulated.</p>`;
+  $('panel-builder').innerHTML = html;
+}
+function builderTaskHTML(task,index,deferred=false) {
+  const level = task.nextLevel == null ? '' : `Lv ${task.level} → ${task.nextLevel}${task.target && task.nextLevel < task.target ? ` / ${task.target}` : ''}`;
+  return `<article class="task builder-task ${index === 0 && !deferred ? 'first' : ''} ${deferred ? 'waiting' : ''}"><span class="rank">${deferred ? '◷' : String(index+1).padStart(2,'0')}</span><div class="task-body"><div class="task-title"><h4>${esc(task.name)}</h4><span class="task-level">${level}</span></div><p>${esc(task.reason)}</p>${task.blocked ? `<p class="builder-prerequisite">First: ${esc(task.requirement)}</p>` : ''}<div class="task-meta">${pill(task.lane,'gray')}${task.blocked ? pill('PREREQUISITE FIRST','orange') : task.manual ? pill('CHECK IN GAME','gold') : ''}${task.time > 0 ? `<span>◷ ${time(task.time)}</span>` : ''}${task.cost > 0 ? `<span>${cost(task.cost,task.resource)}</span>` : ''}${deferred ? `<span>After current upgrade (${formatDuration(task.timer)} at export)</span>` : ''}</div></div></article>`;
 }
 function switchTab(name, focus=false) {
   activeTab = name;
@@ -156,7 +198,9 @@ function sample() {
     heroes:[{data:28000000,lvl:40,timer:58000},{data:28000001,lvl:55},{data:28000002,lvl:25},{data:28000004,lvl:10},{data:28000006,lvl:35}],
     units:data.troops.filter(item=>['Barbarian','Goblin','Dragon','Balloon','Yeti'].includes(item.name)).map(item=>({data:item.id,lvl:Math.max(1,maxLevel(item,th)-2)})),
     spells:data.spells.filter(item=>['Lightning Spell','Rage Spell','Clone Spell','Totem Spell'].includes(item.name)).map(item=>({data:item.id,lvl:Math.max(1,maxLevel(item,th)-1)})),
-    pets:[],equipment:data.equipment.filter(item=>maxLevel(item,th)>0&&item.rarity==='Common').map(item=>({data:item.id,lvl:Math.min(6,maxLevel(item,th))}))};
+    pets:[],equipment:data.equipment.filter(item=>maxLevel(item,th)>0&&item.rarity==='Common').map(item=>({data:item.id,lvl:Math.min(6,maxLevel(item,th))})),
+    buildings2:[{data:1000034,lvl:8},{data:1000046,lvl:8},{data:1000041,lvl:4},{data:1000048,lvl:6},{data:1000045,lvl:7},{data:1000065,lvl:0}],
+    heroes2:[{data:28000003,lvl:18,timer:120000},{data:28000005,lvl:15}],units2:[{data:4000041,lvl:16}]};
   $('village-json').value=JSON.stringify(raw,null,2);
   importVillage(raw,true);
 }
@@ -179,12 +223,27 @@ for(const id of ['builders','army','boost','cwl']) $(id).addEventListener('chang
 document.querySelectorAll('[data-tab]').forEach(button=>{
   button.addEventListener('click',()=>switchTab(button.dataset.tab));
   button.addEventListener('keydown',event=>{
-    const tabs=['queue','townhall','heroes','equipment'];let index=tabs.indexOf(activeTab);
-    if(event.key==='ArrowRight')index=(index+1)%tabs.length;else if(event.key==='ArrowLeft')index=(index+3)%tabs.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=3;else return;
+    const tabs=[...document.querySelectorAll('[data-tab]')].map(tab=>tab.dataset.tab);let index=tabs.indexOf(activeTab);
+    if(event.key==='ArrowRight')index=(index+1)%tabs.length;else if(event.key==='ArrowLeft')index=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=tabs.length-1;else return;
     event.preventDefault();switchTab(tabs[index],true);
   });
 });
 $('panel-queue').addEventListener('click',event=>{const button=event.target.closest('[data-filter]');if(button){filter=button.dataset.filter;renderQueue();}});
+$('panel-heroes').addEventListener('click',event=>{if(event.target.closest('[data-open-builder]'))switchTab('builder',true);});
+$('panel-builder').addEventListener('change',event=>{
+  const field=event.target.dataset.builderField;if(!field)return;
+  const next={...builderOverrides};
+  if(event.target.value==='')delete next[field];else next[field]=Number(event.target.value);
+  try {
+    const nextPlan=analyzeBuilderBase(village,data,next);
+    builderOverrides=next;builderPlan=nextPlan;
+    const scrollY=window.scrollY;renderBuilderBase(true);document.getElementById(`builder-${field}`)?.focus();window.scrollTo(0,scrollY);save();
+  } catch(error) { $('builder-input-error').textContent=error.message;$('builder-input-error').hidden=false; }
+});
+$('panel-builder').addEventListener('click',event=>{
+  if(event.target.id!=='builder-reset')return;
+  builderOverrides={};builderPlan=analyzeBuilderBase(village,data);renderBuilderBase(true);save();
+});
 $('panel-equipment').addEventListener('change',event=>{
   if(event.target.id==='equipment-hero'){heroFilter=event.target.value;renderEquipment();return;}
   const id=event.target.dataset.equipment;if(!id)return;
@@ -200,6 +259,11 @@ $('download-plan').addEventListener('click',()=>{
   lines.push('','RESEARCH');plan.research.forEach(r=>lines.push(`${r.name}: ${r.planned} → ${r.planned+1} (target ${r.target})${r.blocked?` — needs Lab ${r.labNeeded}`:''}`));
   lines.push('','PETS');plan.petTrack.forEach(r=>lines.push(`${r.name}: ${r.planned} → ${r.planned+1} (target ${r.target})${r.blocked?' — Pet House upgrade needed':''}`));
   lines.push('','EQUIPMENT CORE');plan.equipment.filter(r=>r.selected).forEach(r=>lines.push(`${r.name}: ${r.level} / ${r.target}`));
+  lines.push('','BUILDER BASE — SIXTH BUILDER',builderPlan.status,`Requirements: ${BOB_GUIDE_URL}`);
+  builderPlan.checks.forEach(check=>lines.push(`[${check.state}] ${check.label}: ${check.detail}`));
+  builderPlan.tasks.forEach((task,index)=>lines.push(`${index+1}. ${task.name}${task.nextLevel != null ? ` ${task.level} → ${task.nextLevel}` : ''} [${task.lane}]${task.blocked ? ' [prerequisite needed]' : ''}`,`   ${task.reason}`));
+  if(Object.keys(builderOverrides).length)lines.push(`Manual Builder Base values: ${JSON.stringify(builderOverrides)}`);
+  builderPlan.warnings.forEach(warning=>lines.push(warning));
   lines.push('','DATA NOTES',...village.warnings,'Timers reflect the imported snapshot. Confirm requirements and prices in game.');
   const blob=new Blob([lines.join('\n')],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`rush-plan-th${village.th}.txt`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
@@ -211,7 +275,7 @@ try {
     const saved=JSON.parse(localStorage.getItem(storageKey)??'null');
     if(saved?.village){
       const opts=saved.options??{};$('builders').value=opts.builders??'auto';$('army').value=opts.army??'dragons';$('boost').value=opts.boost??0;$('cwl').checked=!!opts.cwl;$('remember').checked=true;
-      selectedEquipment=new Set((opts.equipment??[]).slice(0,10));$('village-json').value=JSON.stringify(saved.village,null,2);importVillage(saved.village,false,true);
+      selectedEquipment=new Set((opts.equipment??[]).slice(0,10));builderOverrides=opts.builderBase??{};$('village-json').value=JSON.stringify(saved.village,null,2);importVillage(saved.village,false,true);
     }
   } catch { /* Storage is optional. An unreadable saved snapshot never prevents a new import. */ }
 } catch {showError('The game data could not load. Refresh the page. If running locally, start the web server instead of opening index.html directly.');$('analyze').textContent='Game data unavailable';}

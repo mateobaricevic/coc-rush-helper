@@ -1,3 +1,5 @@
+import { parseBuilderBase } from './builder-base.js';
+
 export const GUIDE_URL = 'https://docs.google.com/document/d/1zP792qWKVN14hVX_RW4Mui65yRTqqtHaEaj_jwUY-us/edit';
 export const DAY = 86400;
 const categories = ['buildings', 'traps', 'heroes', 'troops', 'spells', 'pets', 'equipment'];
@@ -46,8 +48,11 @@ export function parseVillage(input, data) {
     rows.forEach((row, index) => {
       if (!row || typeof row !== 'object') throw new Error(`An entry in ${category} is not a JSON object.`);
       if (row.village && !['home', 'homeVillage'].includes(row.village)) return;
+      if (data.builderBase?.[category]?.some(candidate => String(candidate.id) === String(row.data ?? row.id))) return;
       const item = cats[category].byId.get(String(row.data ?? row.id)) ?? cats[category].byName.get(key(row.name ?? ''));
       if (!item) {
+        // Builder Base entries sometimes share an API list with Home Village entries.
+        if (data.builderBase?.[category]?.some(candidate => String(candidate.id) === String(row.data ?? row.id) || key(candidate.name) === key(row.name ?? ''))) return;
         if (category === 'troops' && cats.pets.byName.has(key(row.name ?? ''))) return;
         unknown.push(`${category}: ${String(row.name ?? row.data ?? row.id ?? 'unknown').slice(0, 80)}`);
         return;
@@ -60,7 +65,9 @@ export function parseVillage(input, data) {
       }
       if (!count) return;
       result[category].push({ item, id: item.id, name: item.name, level, count, timer, upgrading: timer > 0,
-        planned: level + (timer > 0 ? 1 : 0), gear: !!row.gear_up, weapon: row.weapon == null ? null : Number(row.weapon), uid: `${category}-${index}` });
+        planned: level + (timer > 0 ? 1 : 0), gear: [true,1,'1'].includes(row.gear_up ?? row.gearUp ?? row.gearedUp),
+        gearKnown: row.data != null || row.gear_up != null || row.gearUp != null || row.gearedUp != null,
+        weapon: row.weapon == null ? null : Number(row.weapon), uid: `${category}-${index}` });
       if (item.levels.length && level > item.levels.at(-1).level) warnings.push(`${item.name} level ${level} is newer than the bundled game data. Its upgrade target is unknown.`);
     });
   }
@@ -78,7 +85,7 @@ export function parseVillage(input, data) {
   if (timestamp && Date.now() / 1000 - timestamp > DAY) warnings.push('This snapshot is over a day old. Running upgrades and levels reflect the export, so reimport after upgrades finish.');
   const hutCount = result.buildings.filter(row => row.id === 1000015).reduce((sum, row) => sum + row.count, 0);
   const bob = result.buildings.some(row => row.id === 1000064 && row.level >= 1);
-  return { ...result, th, townHall, present, warnings, unknown, timestamp, cats,
+  return { ...result, th, townHall, present, warnings, unknown, timestamp, cats, builderBase:parseBuilderBase(raw,data),
     name: String(root.name ?? root.playerName ?? (root.tag ? 'Your village' : 'Imported village')).slice(0, 80),
     tag: String(root.tag ?? '').slice(0, 30), builderCount: Math.min(6, Math.max(1, hutCount || 5) + (bob ? 1 : 0)), bob };
 }

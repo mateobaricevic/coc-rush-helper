@@ -10,6 +10,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="builder-base.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -80,7 +81,7 @@
           <label class="remember cwl"><input id="cwl" type="checkbox"> I need my main heroes awake for CWL</label>
           <p class="fine-print">War mode adds a reminder to use a benched hero. Choose who stays awake based on your actual army.</p>
         </details>
-        <div id="source-info" class="source-note">Guide: August 24, 2026<br>Game data: October 12, 2026 · TH1–18</div>
+        <div id="source-info" class="source-note">Guide: August 24, 2026<br>Game data: October 12, 2026 · TH1–18 · BH1–10</div>
       </aside>
 
       <section class="plan-panel" aria-label="Your strategic rush plan" aria-live="polite" aria-atomic="false">
@@ -89,7 +90,7 @@
           <div class="empty-illustration" aria-hidden="true"><div class="illustration-grid"></div><div class="tile tile-back"></div><div class="tile tile-front"><svg viewBox="0 0 80 80" width="64" height="64"><path d="M15 60V34h13V23h24v11h13v26Z" fill="none" stroke="currentColor" stroke-width="3"/><path d="M21 34v-9m37 9v-9M34 60V44h12v16M19 60h42M35 23v-9h10v9" fill="none" stroke="currentColor" stroke-width="3"/></svg></div><span class="small-float">↑ OFFENSE</span></div>
           <h2>A rush with a reason.</h2>
           <p class="empty-copy">Your village has plenty of upgrades.<br>Let’s find the ones that actually move you forward.</p>
-          <div class="empty-benefits"><div><span>01</span><strong>A ranked upgrade queue</strong><p>What to do next, and why it matters.</p></div><div><span>02</span><strong>Your next Town Hall</strong><p>The essentials to finish before moving up.</p></div><div><span>03</span><strong>The long game</strong><p>Heroes, equipment, and magic item value.</p></div></div>
+          <div class="empty-benefits"><div><span>01</span><strong>A ranked upgrade queue</strong><p>What to do next, and why it matters.</p></div><div><span>02</span><strong>Your next Town Hall</strong><p>The essentials to finish before moving up.</p></div><div><span>03</span><strong>The long game</strong><p>Heroes, equipment, and your sixth builder.</p></div></div>
           <button class="text-button sample-link" id="empty-demo">Take a look at a sample plan <span aria-hidden="true">↗</span></button>
         </div>
         <div id="results" hidden>
@@ -102,11 +103,13 @@
             <button id="tab-townhall" role="tab" aria-selected="false" aria-controls="panel-townhall" tabindex="-1" data-tab="townhall">Town Hall</button>
             <button id="tab-heroes" role="tab" aria-selected="false" aria-controls="panel-heroes" tabindex="-1" data-tab="heroes">Heroes</button>
             <button id="tab-equipment" role="tab" aria-selected="false" aria-controls="panel-equipment" tabindex="-1" data-tab="equipment">Equipment</button>
+            <button id="tab-builder" role="tab" aria-selected="false" aria-controls="panel-builder" tabindex="-1" data-tab="builder">Builder Base</button>
           </div>
           <div id="panel-queue" role="tabpanel" aria-labelledby="tab-queue"></div>
           <div id="panel-townhall" role="tabpanel" aria-labelledby="tab-townhall" hidden></div>
           <div id="panel-heroes" role="tabpanel" aria-labelledby="tab-heroes" hidden></div>
           <div id="panel-equipment" role="tabpanel" aria-labelledby="tab-equipment" hidden></div>
+          <div id="panel-builder" role="tabpanel" aria-labelledby="tab-builder" hidden></div>
           <div class="plan-bottom"><span id="plan-count" class="muted"></span><button id="download-plan" class="text-button">Download plan <span aria-hidden="true">↓</span></button></div>
         </div>
       </section>

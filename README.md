@@ -29,7 +29,19 @@ In Clash, open **Settings → More Settings → Export village data in JSON form
 
 The site opens in dark mode. The header theme button switches between dark and light and remembers your choice on this browser. Clearing a village keeps the theme preference.
 
-The parser accepts the real export (`data`, `lvl`, `cnt`, `timer`), named arrays/objects, and partial official player API responses. Home Village buildings, heroes, traps, troops, spells, pets, and equipment are supported. Builder Base is not scheduled; B.O.B’s Hut is used to detect a sixth builder. Unknown IDs produce a visible data note. Partial profiles cannot verify building priorities or Town Hall readiness.
+The parser accepts the real export (`data`, `lvl`, `cnt`, `timer`), named arrays/objects, and partial official player API responses. Home Village buildings, heroes, traps, troops, spells, pets, and equipment are supported. The Builder Base tab reads `buildings2`, `heroes2`, and `units2`/`troops2`, named `builderBase`/`builderVillage` objects, and mixed API entries with `village: "builderBase"`. Unknown IDs produce a visible data note. Partial profiles cannot verify Home Village building priorities or Town Hall readiness.
+
+## Builder Base and the sixth builder
+
+The **Builder Base** tab focuses on B.O.B: reach BH9, finish the three Home Village gear-ups, get one Builder Base troop to 18 and one defense to 9, reach 45 combined Battle Machine / Battle Copter levels, and finish B.O.B Control. Requirements follow [Supercell’s B.O.B guide](https://support.supercell.com/clash-of-clans/en/articles/builder-base-getting-master-builder-to-home-village-3.html); the practical upgrade order is this planner’s interpretation. A gear-up prerequisite table and a short guide are included.
+
+The queue targets BH9 rather than maxing Builder Base. It suggests the next hero, research, gear-up preparation, and defense steps; builders and research stay separate from the Home Village queue. Multi Mortar work overlaps the gear-up and defense requirements, while an existing level-9 defense or level-18 troop already satisfies its task. Battle Copter starts at 15. Any completed hero combination totaling 45 counts; upgrades in progress are displayed separately and do not count as completed requirements.
+
+Some exports omit Builder Base hero or troop levels. Missing values remain **unknown**, with manual fields for Builder Hall, both heroes, highest troop/defense, completed gear-ups, and B.O.B Control. Control levels also confirm earlier claimed tasks, including when underlying levels are missing. Manual entries are stored only with the optional remembered village, included in the text download, and reset on a new import. B.O.B’s Home Village hut confirms the actual unlock and adds him to the detected Home Village builder count.
+
+This is a next-upgrade guide, not a resource-farming simulation or an exact finish-date calculator. Storage affordability, required placements before a Builder Hall upgrade, gear-up prices, and Clock Tower timing need an in-game check. Gold Pass discounts apply to displayed upgrade costs and times.
+
+## Home Village strategy
 
 Recommendations follow one continuous hero builder, offensive capacity, required placements and merge sources, relevant research unlocks, pets, and storage. At TH18, multiple hero upgrades and core defenses become priorities. Equipment choices are explicit user selections, rather than a hard-coded claim about the current meta. Costs/times are base values from the bundled data, adjusted only by the chosen Gold Pass discount. Active timers are seconds remaining **at export**, not a live sync.
 
@@ -38,11 +50,12 @@ Town Hall weapon requirements and storage affordability need an in-game check. T
 ## Source and checks
 
 - `dist/engine.js`: normalization and deterministic recommendation rules.
+- `dist/builder-base.js` and `dist/builder-base.css`: Builder Base parsing, B.O.B progress, next upgrades, and guide layout.
 - `dist/app.js`: import, sample, optional persistence, plan views, and text download.
 - `dist/theme.js` and `dist/theme.css`: dark/light themes and independent theme persistence.
 - `.github/workflows/pages.yml`: validation and deployment to GitHub Pages.
-- `dist/game-data.json`: compact snapshot of [ClashKingAssets game data](https://github.com/ClashKingInc/ClashKingAssets), fetched October 12, 2026; Town Halls 1–18. The data source can contain unknown/zero upgrade costs or timers, displayed as “check in game.”
-- `npm install` then `npm test` tests parser compatibility, important recommendation decisions, imports, settings, tabs, persistence, equipment selection, and downloads. The DOM test library is a development dependency only.
+- `dist/game-data.json`: compact snapshot of [ClashKingAssets game data](https://github.com/ClashKingInc/ClashKingAssets), fetched October 12, 2026; Town Halls 1–18 and Builder Halls 1–10. The data source can contain unknown/zero upgrade costs or timers, displayed as “check in game.”
+- `npm install` then `npm test` tests parser compatibility, important recommendation decisions, Builder Base requirements and upgrade queues, imports, settings, tabs, persistence, equipment selection, and downloads. The DOM test library is a development dependency only.
 - `node scripts/check.mjs` validates static assets and JavaScript syntax.
 
 Independent fan tool, not affiliated with Supercell. The linked guide and original game data belong to their respective authors/owners.
